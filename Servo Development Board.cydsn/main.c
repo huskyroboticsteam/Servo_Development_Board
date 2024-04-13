@@ -56,29 +56,11 @@ int main(void)
     for(;;)
     {
         err = 0;
-        switch(GetState()) {
-            case(UNINIT):
-                SetStateTo(CHECK_CAN);
-                break;
-            case(CHECK_CAN):
-                if (!PollAndReceiveCANPacket(&can_recieve)) {
-                    LED_CAN_Write(ON);
-                    CAN_time_LED = 0;
-                    err = ProcessCAN(&can_recieve, &can_send);
-                }
-                if (GetMode() == MODE1)
-                    SetStateTo(DO_MODE1);
-                else 
-                    SetStateTo(CHECK_CAN);
-                break;
-            case(DO_MODE1):
-                // mode 1 tasks
-                SetStateTo(CHECK_CAN);
-                break;
-            default:
-                err = ERROR_INVALID_STATE;
-                SetStateTo(UNINIT);
-                break;
+        
+        if (!PollAndReceiveCANPacket(&can_recieve)) {
+            LED_CAN_Write(ON);
+            CAN_time_LED = 0;
+            err = ProcessCAN(&can_recieve, &can_send);
         }
         
         if (err) DisplayErrorCode(err);
@@ -87,6 +69,8 @@ int main(void)
             DebugPrint(DBG_UART_UartGetByte());
         }
         
+        PWM_Servo1_WriteCompare(15);
+        
         CyDelay(100);
     }
 }
@@ -94,15 +78,13 @@ int main(void)
 void Initialize(void) {
     CyGlobalIntEnable; /* Enable global interrupts. LED arrays need this first */
     
-    address = getSerialAddress();
-    
     DBG_UART_Start();
     sprintf(txData, "Dip Addr: %x \r\n", address);
     Print(txData);
     
     LED_DBG_Write(0);
     
-    InitCAN(0x4, (int)address);
+    InitCAN(0x7, 0);
     Timer_Period_Reset_Start();
 
     isr_Button_1_StartEx(Button_1_Handler);
@@ -122,20 +104,6 @@ void DebugPrint(char input) {
             break;
     }
     Print(txData);
-}
-
-int getSerialAddress() {
-    int address = 0;
-    
-    if (DIP1_Read()==0) address += 1;
-    if (DIP2_Read()==0) address += 2;
-    if (DIP3_Read()==0) address += 4;
-    if (DIP4_Read()==0) address += 8;
-    
-    if (address == 0)
-        address = DEVICE_SERIAL_TELEM_LOCALIZATION;
-
-    return address;
 }
 
 void DisplayErrorCode(uint8_t code) {    
